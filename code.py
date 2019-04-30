@@ -104,9 +104,9 @@ plot_acc_ttf_data(train_ad_sample_df, train_ttf_sample_df)
 del train_ad_sample_df
 del train_ttf_sample_df
 
+#XGB model
 import time
 import lightgbm as lgb
-
 folds = KFold(n_splits=5, shuffle=True, random_state=15)
 oof = np.zeros(len(train))
 predictions = np.zeros(len(test))
@@ -131,3 +131,33 @@ for fold_, (trn_idx, val_idx) in enumerate(folds.split(train.values, y_train.val
     predictions += clf.predict(test[features], num_iteration=clf.best_iteration) / folds.n_splits
 
 print("CV score: {:<8.5f}".format(mean_squared_error(oof, y_train)**0.5))
+
+#NuSVR model
+GridSearchCV(cv=5, error_score='raise-deprecating',
+       estimator=SVR(C=1.0, cache_size=200, coef0=0.0, degree=3, epsilon=0.1,
+  gamma='auto_deprecated', kernel='rbf', max_iter=-1, shrinking=True,
+  tol=0.01, verbose=False),
+       fit_params=None, iid='warn', n_jobs=None,
+       param_grid=[{'gamma': [0.001, 0.005, 0.01, 0.02, 0.05, 0.1], 'C': [0.1, 0.2, 0.25, 0.5, 1, 1.5, 2]}],
+       pre_dispatch='2*n_jobs', refit=True, return_train_score='warn',
+       scoring='neg_mean_absolute_error', verbose=0)
+
+#KNN model
+knn_final = neighbors.KNeighborsRegressor(500, weights='uniform', metric='manhattan')
+scaler = preprocessing.StandardScaler()
+scaler.fit(X_train)
+knn_final.fit(scaler.transform(X_train), y_train)
+
+submission = pd.read_csv('../input/sample_submission.csv', index_col='seg_id')
+X_test = pd.DataFrame(dtype = np.float64, index = submission.index,columns=range(0,1500))
+for seg_id in tqdm(X_test.index):
+    seg = pd.read_csv('../input/test/' + seg_id + '.csv')
+    xc = np.sort(seg['acoustic_data'].values)
+    X_test.loc[seg_id,:] = np.reshape(xc, (-1, 100)).sum(axis=-1)
+
+submission['time_to_failure'] = knn_final.predict(scaler.transform(X_test))
+print(submission.head(5))
+
+submission.to_csv('knn_std.csv')
+
+
